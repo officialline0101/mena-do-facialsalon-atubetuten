@@ -1268,17 +1268,6 @@
             </div>
         </div>
 
-        <!-- 第三希望日時 -->
-        <div class="labelkibounitizi">第三希望日時<span class="required">必須</span></div>
-        <div class="datetime-wrapper" style="text-align: center;">
-            <span class="placeholder" id="placeholder3">⇩タップして日時を入力⇩</span>
-            <input type="hidden" id="date3" name="date3">
-            <div class="dt-grid">
-                <select id="date3_day" class="datetime-input" aria-label="日付を選択"></select>
-                <select id="date3_time" class="datetime-input" aria-label="時間（00/30のみ）"></select>
-            </div>
-        </div>
-
         <div class="labeltyuuou">メッセージ<br>（質問等お気軽にご記入ください）</div>
         <textarea id="message" rows="4" placeholder="メッセージを入力してください"></textarea>
 
@@ -1426,13 +1415,6 @@
                 ? `・<span style="color:#45c4b7;"><strong>第2希望日</strong></span><br>${formatDateTime(selectedDate2)}`
                 : '・第2希望日が未選択です';
 
-            // 第3希望日が選択された場合の表示
-            const selectedDate3 = document.getElementById('date3').value;
-            const selectedDate3Text = selectedDate3
-                ? `・<span style="color:#45c4b7;"><strong>第3希望日</strong></span><br>${formatDateTime(selectedDate3)}`
-                : '・第3希望日が未選択です';
-
-
             // 修正ボタン付きのHTMLを作成
             document.getElementById('displayInfo').innerHTML = `
         <div class="info-row">
@@ -1463,11 +1445,6 @@
         <div class="info-row">
             <p>${selectedDate2Text}</p>
             <button class="edit-button" onclick="scrollToElement('date2')">修正</button>
-        </div>
-        <hr>
-        <div class="info-row">
-            <p>${selectedDate3Text}</p>
-            <button class="edit-button" onclick="scrollToElement('date3')">修正</button>
         </div>
         <hr>
     `;
@@ -1520,170 +1497,158 @@
             });
         });
 
-        const JP_WD = ['日', '月', '火', '水', '木', '金', '土'];
-        const pad = n => String(n).padStart(2, '0');
+const JP_WD = ['日', '月', '火', '水', '木', '金', '土'];
+const pad = n => String(n).padStart(2, '0');
 
-        function toISODateTimeLocal(dayStr, timeStr) {
-            if (!dayStr || !timeStr) return "";
-            return `${dayStr}T${timeStr}`;
+function toISODateTimeLocal(dayStr, timeStr) {
+    if (!dayStr || !timeStr) return "";
+    return `${dayStr}T${timeStr}`;
+}
+
+// 日付セレクト：今日から 'days' 日ぶんの候補を作る（月火も含む）
+function buildDateOptions(selectEl, days = 120, startDate = new Date()) {
+    const d = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    selectEl.innerHTML = '<option value="" disabled selected>日付を選択</option>';
+
+    for (let i = 0; i < days; i++) {
+        const wd = d.getDay(); // 0=日曜 … 6=土曜
+        const y = d.getFullYear();
+        const m = pad(d.getMonth() + 1);
+        const day = pad(d.getDate());
+        const value = `${y}-${m}-${day}`;
+        const label = `${y}/${m}/${day}（${JP_WD[wd]}）`;
+
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        selectEl.appendChild(opt);
+
+        d.setDate(d.getDate() + 1);
+    }
+}
+
+// 曜日ごとの営業時間設定（全日共通 09:30〜20:00）
+const WEEKLY_HOURS = {
+    0: { start: 9, end: 19 }, // 日曜
+    1: { start: 9, end: 19 }, // 月曜
+    2: { start: 9, end: 19 }, // 火曜
+    3: { start: 9, end: 19 }, // 水曜
+    4: { start: 9, end: 19 }, // 木曜
+    5: { start: 9, end: 19 }, // 金曜
+    6: { start: 9, end: 19 }  // 土曜
+};
+
+// 休憩帯除外（必要ならそのまま残す）
+function isBlockedTime(weekday, h, m) {
+    const minutes = h * 60 + m;
+
+    // 平日（月〜金）：12:00〜13:30
+    if (weekday >= 1 && weekday <= 5) {
+        if (minutes >= 12 * 60 && minutes <= 13 * 60 + 30) return true;
+    }
+
+    // 土日：12:00〜13:00
+    if (weekday === 0 || weekday === 6) {
+        if (minutes >= 12 * 60 && minutes <= 13 * 60) return true;
+    }
+
+    return false;
+}
+
+// 時間セレクト生成
+function buildHalfHourOptions(selectEl, weekday) {
+    selectEl.innerHTML = '<option value="" disabled selected>時間を選択</option>';
+
+    const { start, end } = WEEKLY_HOURS[weekday] || { start: 9, end: 19 };
+
+    // 09:30〜20:00（20:30は除外）
+    for (let h = start; h <= end; h++) {
+        for (const m of [0, 30]) {
+            // 09:00は除外（09:30スタート）
+            if (h === 9 && m === 0) continue;
+            // ★休憩帯スキップ
+            if (isBlockedTime(weekday, h, m)) continue;
+
+            const hh = pad(h);
+            const mm = pad(m);
+            const opt = document.createElement('option');
+            opt.value = `${hh}:${mm}`;
+            opt.textContent = `${hh}:${mm}`;
+            selectEl.appendChild(opt);
         }
+    }
+}
 
-        // 日付セレクト：今日から 'days' 日ぶんの候補を作る（月曜・火曜は除外）
-        function buildDateOptions(selectEl, days = 120, startDate = new Date()) {
-            const d = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-            selectEl.innerHTML = '<option value="" disabled selected>日付を選択</option>';
+// 以下はそのまま
+function updateHiddenAndPlaceholder(baseId) {
+    const day = document.getElementById(`${baseId}_day`).value;
+    const time = document.getElementById(`${baseId}_time`).value;
+    const hidden = document.getElementById(baseId);
+    const ph = document.getElementById(`placeholder${baseId.slice(-1)}`);
 
-            for (let i = 0; i < days; i++) {
-                const wd = d.getDay(); // 0=日曜 … 6=土曜
+    hidden.value = day && time ? `${day}T${time}` : "";
 
-                // ★月曜(1)と火曜(2)はスキップ
-                if (wd !== 1 && wd !== 2) {
-                    const y = d.getFullYear();
-                    const m = pad(d.getMonth() + 1);
-                    const day = pad(d.getDate());
-                    const value = `${y}-${m}-${day}`;
-                    const label = `${y}/${m}/${day}（${JP_WD[wd]}）`;
+    if (ph) ph.style.display = hidden.value ? 'none' : '';
 
-                    const opt = document.createElement('option');
-                    opt.value = value;
-                    opt.textContent = label;
-                    selectEl.appendChild(opt);
-                }
+    if (typeof updateDisplayInfo === 'function') updateDisplayInfo();
+}
 
-                d.setDate(d.getDate() + 1);
-            }
+function restoreIfAny(baseId) {
+    const hidden = document.getElementById(baseId);
+    if (!hidden.value) return;
+    const [d, t] = hidden.value.split('T');
+    const daySel = document.getElementById(`${baseId}_day`);
+    const timeSel = document.getElementById(`${baseId}_time`);
+
+    if (d && ![...daySel.options].some(o => o.value === d)) {
+        const tmp = document.createElement('option');
+        tmp.value = d; tmp.textContent = d.replaceAll('-', '/') + '（選択日）';
+        daySel.insertBefore(tmp, daySel.options[1]);
+    }
+    if (d) daySel.value = d;
+
+    if (t) {
+        const t5 = t.slice(0, 5);
+        if (d) {
+            const wd = new Date(d).getDay();
+            buildHalfHourOptions(timeSel, wd);
         }
-
-        // 曜日ごとの営業時間設定（0=日曜, 1=月曜, …, 6=土曜）
-        const WEEKLY_HOURS = {
-            0: { start: 10, end: 16 }, // 日曜 10:00〜16:30
-            1: { start: 10, end: 18 }, // 月曜 10:00〜18:30
-            2: { start: 10, end: 18 }, // 火曜 10:00〜18:30
-            3: { start: 10, end: 18 }, // 水曜
-            4: { start: 10, end: 18 }, // 木曜
-            5: { start: 10, end: 18 }, // 金曜
-            6: { start: 10, end: 16 }  // 土曜 10:00〜16:30
-        };
-
-        // 指定曜日の12:00〜の休憩帯を除外（上限を含む）
-        function isBlockedTime(weekday, h, m) {
-            const minutes = h * 60 + m;
-
-            // 平日（月〜金＝1..5）：12:00 <= t <= 13:30
-            if (weekday >= 1 && weekday <= 5) {
-                if (minutes >= 12 * 60 && minutes <= 13 * 60 + 30) return true;
-            }
-
-            // 土日（日=0, 土=6）：12:00 <= t <= 13:00
-            if (weekday === 0 || weekday === 6) {
-                if (minutes >= 12 * 60 && minutes <= 13 * 60) return true;
-            }
-
-            return false;
+        if ([...timeSel.options].some(o => o.value === t5)) {
+            timeSel.value = t5;
         }
+    }
+}
 
-        // 時間セレクト生成（曜日ごと）
-        function buildHalfHourOptions(selectEl, weekday) {
-            selectEl.innerHTML = '<option value="" disabled selected>時間を選択</option>';
+function initPicker(baseId, dateDays = 120) {
+    const daySel = document.getElementById(`${baseId}_day`);
+    const timeSel = document.getElementById(`${baseId}_time`);
 
-            // 月曜・火曜は日付自体を出していないが、万一選ばれた場合は時間を出さない
-            if (weekday === 1 || weekday === 2) return;
+    buildDateOptions(daySel, dateDays);
 
-            const { start, end } = WEEKLY_HOURS[weekday] || { start: 0, end: 23 };
+    timeSel.innerHTML = '<option value="" selected hidden>時間を選択</option>';
+    timeSel.classList.add('time-disabled');
 
-            for (let h = start; h <= end; h++) {
-                for (const m of [0, 30]) {
-                    // ★休憩帯はスキップ（選択肢に出さない）
-                    if (isBlockedTime(weekday, h, m)) continue;
-
-                    const hh = pad(h);
-                    const mm = pad(m);
-                    const opt = document.createElement('option');
-                    opt.value = `${hh}:${mm}`;
-                    opt.textContent = `${hh}:${mm}`;
-                    selectEl.appendChild(opt);
-                }
-            }
-        }
-
-        // 既存の updateHiddenAndPlaceholder にこの1行を追加（表示用更新）
-        function updateHiddenAndPlaceholder(baseId) {
-            const day = document.getElementById(`${baseId}_day`).value;
-            const time = document.getElementById(`${baseId}_time`).value;
-            const hidden = document.getElementById(baseId);
-            const ph = document.getElementById(`placeholder${baseId.slice(-1)}`);
-
-            hidden.value = day && time ? `${day}T${time}` : "";
-
-            if (ph) ph.style.display = hidden.value ? 'none' : '';
-
-            // ★表示用パネルを即更新（存在すれば）
-            if (typeof updateDisplayInfo === 'function') updateDisplayInfo();
-        }
-
-        // 既存 hidden の値（編集時）をセレクトへ復元。日付は範囲外なら一時的に先頭へ追加
-        function restoreIfAny(baseId) {
-            const hidden = document.getElementById(baseId);
-            if (!hidden.value) return;
-            const [d, t] = hidden.value.split('T');
-            const daySel = document.getElementById(`${baseId}_day`);
-            const timeSel = document.getElementById(`${baseId}_time`);
-
-            if (d && ![...daySel.options].some(o => o.value === d)) {
-                const tmp = document.createElement('option');
-                tmp.value = d; tmp.textContent = d.replaceAll('-', '/') + '（選択日）';
-                daySel.insertBefore(tmp, daySel.options[1]); // 先頭のplaceholderの次に追加
-            }
-            if (d) daySel.value = d;
-
-            // 時間はブロック帯の場合、復元されない（選び直しになる）
-            if (t) {
-                const t5 = t.slice(0, 5);
-                // いったん時間候補を生成してから復元を試みる
-                if (d) {
-                    const wd = new Date(d).getDay();
-                    buildHalfHourOptions(timeSel, wd);
-                }
-                if ([...timeSel.options].some(o => o.value === t5)) {
-                    timeSel.value = t5;
-                }
-            }
-        }
-
-        function initPicker(baseId, dateDays = 120) {
-            const daySel = document.getElementById(`${baseId}_day`);
-            const timeSel = document.getElementById(`${baseId}_time`);
-
-            buildDateOptions(daySel, dateDays);
-
-            // 初期状態：まだ日付を選んでいないのでグレー＆非活性風
+    daySel.addEventListener('change', () => {
+        const dateVal = daySel.value;
+        if (dateVal) {
+            const d = new Date(dateVal);
+            const wd = d.getDay();
+            buildHalfHourOptions(timeSel, wd);
+            timeSel.classList.remove('time-disabled');
+        } else {
             timeSel.innerHTML = '<option value="" selected hidden>時間を選択</option>';
             timeSel.classList.add('time-disabled');
-
-            daySel.addEventListener('change', () => {
-                const dateVal = daySel.value;
-                if (dateVal) {
-                    const d = new Date(dateVal);
-                    const wd = d.getDay();
-                    buildHalfHourOptions(timeSel, wd);
-                    // 日付を選んだら有効化
-                    timeSel.classList.remove('time-disabled');
-                } else {
-                    // 日付を未選択に戻したら再びグレー＆非活性風
-                    timeSel.innerHTML = '<option value="" selected hidden>時間を選択</option>';
-                    timeSel.classList.add('time-disabled');
-                }
-                updateHiddenAndPlaceholder(baseId);
-            });
-
-            restoreIfAny(baseId);
-
-            timeSel.addEventListener('change', () => updateHiddenAndPlaceholder(baseId));
-            updateHiddenAndPlaceholder(baseId);
         }
+        updateHiddenAndPlaceholder(baseId);
+    });
 
-        // 3つ分を初期化
-        ['date1', 'date2', 'date3'].forEach(id => initPicker(id, 120));
+    restoreIfAny(baseId);
+
+    timeSel.addEventListener('change', () => updateHiddenAndPlaceholder(baseId));
+    updateHiddenAndPlaceholder(baseId);
+}
+
+['date1', 'date2'].forEach(id => initPicker(id, 120));
 
 
         function selectSymptom(button, treatmentId) {
@@ -2154,8 +2119,7 @@ function submitForm() {
         irradiationsCount: irradiationsCount,
         dates: [
             document.getElementById('date1').value,
-            document.getElementById('date2').value,
-            document.getElementById('date3').value
+            document.getElementById('date2').value
         ],
         message: document.getElementById('message').value.trim()
     };
