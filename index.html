@@ -1245,7 +1245,7 @@
 </div>
 
         <!-- ② HTML：各ブロックの「日付入力」をラップして“日付を選択”を重ねる -->
-        <div class="labelkibounitizi">希望日時<span class="required">必須</span></div>
+        <div class="labelkibounitizi" id="kibou1">希望日時<span class="required">必須</span></div>
         <div class="datetime-wrapper" style="text-align: center;">
             <span class="placeholder" id="placeholder1">⇩タップして日時を入力⇩</span>
             <!-- 提出/既存処理用：ISO(YYYY-MM-DDTHH:MM) を入れる -->
@@ -1258,7 +1258,7 @@
         </div>
 
         <!-- 第二希望日時 -->
-        <div class="labelkibounitizi">第二希望日時<span class="required">必須</span></div>
+        <div class="labelkibounitizi" id="kibou2">第二希望日時<span class="required">必須</span></div>
         <div class="datetime-wrapper" style="text-align: center;">
             <span class="placeholder" id="placeholder2">⇩タップして日時を入力⇩</span>
             <input type="hidden" id="date2" name="date2">
@@ -1439,12 +1439,12 @@
         <hr>
         <div class="info-row">
             <p>${selectedDate1Text}</p>
-            <button class="edit-button" onclick="scrollToElement('date1')">修正</button>
+            <button class="edit-button" onclick="scrollToElement('date1'); scrollToElement('kibou1');">修正</button>
         </div>
         <hr>
         <div class="info-row">
             <p>${selectedDate2Text}</p>
-            <button class="edit-button" onclick="scrollToElement('date2')">修正</button>
+            <button class="edit-button" onclick="scrollToElement('date2'); scrollToElement('kibou2');">修正</button>
         </div>
         <hr>
     `;
@@ -1527,15 +1527,15 @@ function buildDateOptions(selectEl, days = 120, startDate = new Date()) {
     }
 }
 
-// 曜日ごとの営業時間設定（全日共通 09:30〜20:00）
+// 曜日ごとの営業時間設定（全日共通 09:30〜20:00 までに変更）
 const WEEKLY_HOURS = {
-    0: { start: 9, end: 19 }, // 日曜
-    1: { start: 9, end: 19 }, // 月曜
-    2: { start: 9, end: 19 }, // 火曜
-    3: { start: 9, end: 19 }, // 水曜
-    4: { start: 9, end: 19 }, // 木曜
-    5: { start: 9, end: 19 }, // 金曜
-    6: { start: 9, end: 19 }  // 土曜
+    0: { start: 9, end: 20 }, // 日曜 ← 20に変更
+    1: { start: 9, end: 20 }, // 月曜 ← 20に変更
+    2: { start: 9, end: 20 }, // 火曜 ← 20に変更
+    3: { start: 9, end: 20 }, // 水曜 ← 20に変更
+    4: { start: 9, end: 20 }, // 木曜 ← 20に変更
+    5: { start: 9, end: 20 }, // 金曜 ← 20に変更
+    6: { start: 9, end: 20 }  // 土曜 ← 20に変更
 };
 
 // 休憩帯除外（必要ならそのまま残す）
@@ -1559,7 +1559,7 @@ function isBlockedTime(weekday, h, m) {
 function buildHalfHourOptions(selectEl, weekday) {
     selectEl.innerHTML = '<option value="" disabled selected>時間を選択</option>';
 
-    const { start, end } = WEEKLY_HOURS[weekday] || { start: 9, end: 19 };
+    const { start, end } = WEEKLY_HOURS[weekday] || { start: 9, end: 20 };
 
     // 09:30〜20:00（20:30は除外）
     for (let h = start; h <= end; h++) {
@@ -1568,6 +1568,8 @@ function buildHalfHourOptions(selectEl, weekday) {
             if (h === 9 && m === 0) continue;
             // ★休憩帯スキップ
             if (isBlockedTime(weekday, h, m)) continue;
+            // ★20:30は除外
+            if (h === 20 && m === 30) continue;
 
             const hh = pad(h);
             const mm = pad(m);
@@ -1649,7 +1651,6 @@ function initPicker(baseId, dateDays = 120) {
 }
 
 ['date1', 'date2'].forEach(id => initPicker(id, 120));
-
 
         function selectSymptom(button, treatmentId) {
             // 選択された日時をリセット
